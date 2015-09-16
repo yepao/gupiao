@@ -1,0 +1,22 @@
+package ddq.Dao;
+
+import ddq.model.*;
+import ddq.model.Currency;
+
+import java.util.*;
+
+public class SysDao extends BaseDao {
+	
+	  public List<Currency> selectAllCurrency() throws Exception {  
+		  
+	        List<Currency> cashList = null;  
+	        try {  
+	        	cashList = getSqlMapClientTemplate().queryForList("selectAllCurrency",null);  
+	        } catch (Exception e) {  
+	            e.printStackTrace();  
+	            throw e;  
+	        }  
+	        return cashList;  
+	    }  
+
+}

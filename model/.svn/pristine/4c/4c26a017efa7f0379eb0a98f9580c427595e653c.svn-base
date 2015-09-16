@@ -1,0 +1,216 @@
+package ddq.model;
+
+import java.util.*;
+
+public class JsonClass {
+
+	TotalAssets totalAssets =new TotalAssets();
+	Markets markets = new Markets();
+	Persons persons=new Persons();
+	public TotalAssets getTotalAssets() {
+		return totalAssets;
+	}
+	public void setTotalAssets(TotalAssets totalAssets) {
+		this.totalAssets = totalAssets;
+	}
+	public Markets getMarkets() {
+		return markets;
+	}
+	public void setMarkets(Markets markets) {
+		this.markets = markets;
+	}
+	public Persons getPersons() {
+		return persons;
+	}
+	public void setPersons(Persons persons) {
+		this.persons = persons;
+	}
+
+	public class TotalAssets
+	{
+		String result;
+		TotalAsset model =new TotalAsset(); 
+		String code;
+		String msg;
+		public String getResult() {
+			return result;
+		}
+		public void setResult(String result) {
+			this.result = result;
+		}
+		public TotalAsset getModel() {
+			return model;
+		}
+		public void setModel(TotalAsset model) {
+			this.model = model;
+		}
+		public String getCode() {
+			return code;
+		}
+		public void setCode(String code) {
+			this.code = code;
+		}
+		public String getMsg() {
+			return msg;
+		}
+		public void setMsg(String msg) {
+			this.msg = msg;
+		}
+	}
+
+	public class TotalAsset
+	{
+		String total;
+		ArrayList<JsonData> data =new ArrayList<JsonData>();
+		public String getTotal() {
+			return total;
+		}
+		public void setTotal(String total) {
+			this.total = total;
+		}
+		public ArrayList<JsonData> getData() {
+			return data;
+		}
+		public void setData(ArrayList<JsonData> data) {
+			this.data = data;
+		}
+	}
+
+
+
+	public class Markets
+	{
+		String result;
+		ArrayList<Market> model =new ArrayList<Market>(); 
+		String code;
+		String msg;
+		public String getResult() {
+			return result;
+		}
+		public void setResult(String result) {
+			this.result = result;
+		}
+		public ArrayList<Market> getModel() {
+			return model;
+		}
+		public void setModel(ArrayList<Market> model) {
+			this.model = model;
+		}
+		public String getCode() {
+			return code;
+		}
+		public void setCode(String code) {
+			this.code = code;
+		}
+		public String getMsg() {
+			return msg;
+		}
+		public void setMsg(String msg) {
+			this.msg = msg;
+		}
+	}
+
+	public class Market
+	{
+		String name;
+		MarketDate data=new MarketDate();
+		public String getName() {
+			return name;
+		}
+		public void setName(String name) {
+			this.name = name;
+		}
+		public MarketDate getData() {
+			return data;
+		}
+		public void setData(MarketDate data) {
+			this.data = data;
+		}
+	}
+
+	public class MarketDate
+	{
+		JsonData rmb;
+		JsonData original;
+		public JsonData getRmb() {
+			return rmb;
+		}
+		public void setRmb(JsonData rmb) {
+			this.rmb = rmb;
+		}
+		public JsonData getOriginal() {
+			return original;
+		}
+		public void setOriginal(JsonData original) {
+			this.original = original;
+		}
+	}
+
+
+
+	public class Persons
+	{
+		String result;
+		ArrayList<Person> model=new ArrayList<Person>(); 
+		String code;
+		String msg;
+		public String getResult() {
+			return result;
+		}
+		public void setResult(String result) {
+			this.result = result;
+		}
+		public List<Person> getModel() {
+			return model;
+		}
+		public void setModel(ArrayList<Person> model) {
+			this.model = model;
+		}
+		public String getCode() {
+			return code;
+		}
+		public void setCode(String code) {
+			this.code = code;
+		}
+		public String getMsg() {
+			return msg;
+		}
+		public void setMsg(String msg) {
+			this.msg = msg;
+		}
+	}
+
+	public class Person
+	{
+		String name;
+		String code;
+		String type;
+		MarketDate data=new MarketDate();
+		public String getName() {
+			return name;
+		}
+		public void setName(String name) {
+			this.name = name;
+		}
+		public String getCode() {
+			return code;
+		}
+		public void setCode(String code) {
+			this.code = code;
+		}
+		public String getType() {
+			return type;
+		}
+		public void setType(String type) {
+			this.type = type;
+		}
+		public MarketDate getData() {
+			return data;
+		}
+		public void setData(MarketDate data) {
+			this.data = data;
+		}
+	}
+
+}
+

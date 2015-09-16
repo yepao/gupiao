@@ -1,0 +1,33 @@
+package ddq.Service;
+
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+import ddq.Dao.*;
+import ddq.model.*;
+
+@Component
+@Transactional
+public class SysService  {
+
+	@Autowired
+	private SysDao sysDao;
+
+	public List<Currency> selectAllCurrency() throws Exception { 
+
+		return sysDao.selectAllCurrency();
+	}
+
+
+	public int addUserLog(UserLog userlog) throws Exception { 
+		return sysDao.insertUserLog(userlog);
+	}
+
+	public int deleteUserLog(int id) throws Exception { 
+		return sysDao.deleteUserLogById(id);
+	}
+
+}

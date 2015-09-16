@@ -1,0 +1,885 @@
+package ddq.Service;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+import ddq.Dao.StockDao;
+import ddq.model.*;
+
+import java.text.SimpleDateFormat;
+import java.util.*;
+
+
+@Component
+@Transactional
+public class StockService {
+
+	private DebtService debtService;
+	private StockDao stockDao;
+
+	public DebtService getDebtService() {
+		return debtService;
+	}
+
+	public void setDebtService(DebtService debtService) {
+		this.debtService = debtService;
+	}
+
+	public StockDao getStockDao() {
+		return stockDao;
+	}
+
+	public void setStockDao(StockDao stockDao) {
+		this.stockDao = stockDao;
+	}
+
+
+	SimpleDateFormat sdf=new SimpleDateFormat("yyyy-MM-dd");
+
+	/**
+	 * 买股票  type-1 用现金 2 用融资 Operation 1
+	 * @return 1 成功 0 失败
+	 **/
+	public int BuyStock(StockFlow stockflow,int type) throws Exception 
+	{
+		int key=0;
+		try{
+
+			//计算操作成本
+			double feeprice=0;
+
+			int cashflowid=0;
+			int debtflowid=0;
+			stockflow.setOperation(1);
+			//插入流水
+			if(type==1)
+			{
+				Cash cash=new Cash();
+				cash.setCurrency(stockflow.getCurrency());
+				cash.setCreatedate(stockflow.getTimestamp());
+				cash.setUid(stockflow.getUid());
+				cash.setCash(-(stockflow.getPosition()*stockflow.getPrice()+feeprice));
+				cashflowid=debtService.getCashService().addCash(cash);
+			}else if(type==2)
+			{
+				Debt debt=new Debt();
+				debt.setCurrency(stockflow.getCurrency());
+				debt.setCreatedate(stockflow.getTimestamp());
+				debt.setUid(stockflow.getUid());
+				debt.setDebt(-(stockflow.getPosition()*stockflow.getPrice()+feeprice));
+				debt.setStarttime(stockflow.getTimestamp());
+				debt.setRate(0.08);
+				debtflowid=debtService.addDebt(debt);
+			}
+			stockflow.setCashflowid(cashflowid);
+			stockflow.setDebtflowid(debtflowid);
+			stockflow.setFeeprice(feeprice);
+			key=stockDao.insertStockFlow(stockflow);
+			stockflow.setId(key);
+
+			//更新用户持股
+			updateStockUser(stockflow);
+
+			//插入日志
+			AddStockLog(stockflow);
+			AddStockSysLog(stockflow);
+
+		}catch(Exception e)
+		{
+			e.printStackTrace();
+			key=0;
+			throw e;
+		}
+		return key;
+	}
+
+	public int AddStockLog(StockFlow stockflow) throws Exception
+	{
+		StockLog stocklog=new StockLog();
+		stocklog.setFeeprice(stockflow.getFeeprice());
+		stocklog.setCashflowid(stockflow.getCashflowid());
+		stocklog.setDebtflowid(stockflow.getDebtflowid());
+		stocklog.setOperation(stockflow.getOperation());
+		stocklog.setPosition(stockflow.getPosition());
+		stocklog.setPrice(stockflow.getPrice());
+		stocklog.setStockid(stockflow.getStockid());
+		stocklog.setTimestamp(stockflow.getTimestamp());
+		stocklog.setUid(stockflow.getUid());
+
+		int key=stockDao.insertStockLog(stocklog);
+		return key;
+	}
+
+	public int AddStockSysLog(StockFlow stockflow) throws Exception
+	{
+		StockSysLog stocksysflow=new StockSysLog();
+		stocksysflow.setFeeprice(stockflow.getFeeprice());
+		stocksysflow.setCashflowid(stockflow.getCashflowid());
+		stocksysflow.setDebtflowid(stockflow.getDebtflowid());
+		stocksysflow.setOperation(stockflow.getOperation());
+		stocksysflow.setPosition(stockflow.getPosition());
+		stocksysflow.setPrice(stockflow.getPrice());
+		stocksysflow.setStockid(stockflow.getStockid());
+		stocksysflow.setTimestamp(stockflow.getTimestamp());
+		stocksysflow.setUid(stockflow.getUid());
+
+		int key=stockDao.insertStockSysLog(stocksysflow);
+		return key;
+	}
+
+	/**
+	 * 得到所有的股票信息
+	 * @return
+	 * @throws Exception
+	 */
+	public Map selectStock() throws Exception
+	{
+		Map result=new HashMap();
+		List<Stock> list=stockDao.selectStock();
+		
+		for(int i=0;i<list.size();i++)
+		{
+		   Stock temp =list.get(0);
+		   result.put(temp.getStockid(), temp);
+		}
+		
+		return result;
+	}
+
+	/**
+	 * 买股票  reduceDebt 是否还融资  Operation 2
+	 * @return 1 成功 0 失败
+	 **/
+	public int SellStock(StockFlow stockflow,boolean reduceDebt) throws Exception
+	{
+		int key=0;
+		try
+		{
+			//计算卖出总额
+			double feeprice=0;
+			double sumcash=stockflow.getPosition()*stockflow.getPrice();
+			stockflow.setOperation(2);
+			int debtflowid=0;
+			int cashflowid=0;
+			if(reduceDebt)
+			{
+				double debtall=0;
+				Debt debt=new Debt();
+				debt.setUid(stockflow.getUid());
+				debt.setCurrency(stockflow.getCurrency());
+				debt.setRate(0.08);
+
+				//查询融资总额
+				List<HashMap<String,Object>> list1=debtService.getDebtDao().selectDebtSUMByUid(debt);
+				if(list1.size()>0)
+				{
+					HashMap<String,Object> map1=list1.get(0);
+					debtall=Double.parseDouble(map1.get("debt").toString());
+				}
+
+				//全部用来还融资
+				if(debtall>=sumcash)
+				{
+					debt.setDebt(sumcash);
+					sumcash=0;
+					debtflowid=debtService.reduceDebt(debt, false);
+				}
+				else
+				{
+					debt.setDebt(debtall);
+					sumcash=sumcash-debtall;
+					debtflowid=debtService.reduceDebt(debt, false);
+				}
+			}
+
+			if(sumcash>0)//插入现金
+			{
+				Cash cash=new Cash();
+				cash.setCash(sumcash);
+				cash.setUid(stockflow.getUid());
+				cash.setCurrency(stockflow.getCurrency());
+				cash.setRemark("买股票收益");
+				cashflowid=debtService.getCashService().addCash(cash);
+			}
+
+			stockflow.setCashflowid(cashflowid);
+			stockflow.setDebtflowid(debtflowid);
+			stockflow.setFeeprice(feeprice);
+			key=stockDao.insertStockFlow(stockflow);
+			stockflow.setId(key);
+
+
+			//更新用户持股
+			updateStockUser(stockflow);
+
+
+			//插入日志
+			AddStockLog(stockflow);
+			AddStockSysLog(stockflow);
+
+		}catch(Exception e)
+		{
+			e.printStackTrace();
+			key=0;
+			throw e;
+		}
+		return key;
+	}
+
+
+	/**
+	 * 删除买股票  Operation 3
+	 * @return 1 成功 0 失败
+	 **/
+	public int deleteBuyStock(StockFlow stockflow) throws Exception
+	{
+		int key=0;
+		try
+		{
+			stockflow.setOperation(3);
+			List<StockFlow> list=stockDao.selectStockFlowById(stockflow.getId());
+			if(list.size()>0)
+			{
+				stockflow=list.get(0);
+				int cashflowid=stockflow.getCashflowid();
+				int debtflowid=stockflow.getDebtflowid();
+
+				//回滚现金流水
+				if(cashflowid>0)
+				{
+					debtService.getCashService().deleteCashFlowById(cashflowid);
+				}
+				//回滚融资流水
+				if(debtflowid>0)
+				{
+					debtService.deleteDebt(debtflowid);
+				}
+
+				key=stockDao.delStockFlow(stockflow.getId());
+
+				//更新用户持股
+				updateStockUser(stockflow);
+
+
+				//插入日志
+				AddStockLog(stockflow);
+				AddStockSysLog(stockflow);
+
+			}
+		}catch(Exception e)
+		{
+			e.printStackTrace();
+			key=0;
+			throw e;
+		}
+		return key;
+	}
+
+
+	/**
+	 * 删除买股票  Operation 4
+	 * @return 1 成功 0 失败
+	 **/
+	public int deleteSellStock(StockFlow stockflow) throws Exception
+	{
+		int key=0;
+		try
+		{
+			stockflow.setOperation(4);
+			List<StockFlow> list=stockDao.selectStockFlowById(stockflow.getId());
+			if(list.size()>0)
+			{
+				stockflow=list.get(0);
+				int cashflowid=stockflow.getCashflowid();
+				int debtflowid=stockflow.getDebtflowid();
+
+				//回滚现金流水
+				if(cashflowid>0)
+				{
+					debtService.getCashService().deleteCashFlowById(cashflowid);
+				}
+				//回滚融资流水
+				if(debtflowid>0)
+				{
+					debtService.deleteRDebt(debtflowid);
+				}
+
+				key=stockDao.delStockFlow(stockflow.getId());
+
+				//更新用户持股
+				updateStockUser(stockflow);
+
+				//插入日志
+				AddStockLog(stockflow);
+				AddStockSysLog(stockflow);
+
+			}
+		}catch(Exception e)
+		{
+			e.printStackTrace();
+			key=0;
+			throw e;
+		}
+		return key;
+	}
+
+
+
+	/**
+	 * 每日计算  map《股票ID,当前价格》
+	 * @return 
+	 */
+	public int addProfit(Map map,Date date) throws Exception
+	{
+		int key=0;
+		try
+		{
+			//删除单日计算
+			stockDao.deleteStockSnapByTime(sdf.format(date));
+			stockDao.deleteStockProfitByTime(sdf.format(date));
+
+			Calendar cal=Calendar.getInstance();
+			cal.setTime(date);
+			cal.add(Calendar.DATE, -1);
+			List<Stock> list4=stockDao.selectAllStock();
+			List<StockFlow> list2=stockDao.selectStockFlowByDate(sdf.format(date)); 
+			List<StockSnap> list1=stockDao.selectStockSnapByDate(sdf.format(cal.getTime()));
+			List<StockUser> list=stockDao.selectAllStockUser();
+
+			List<StockProfit> insertlist=new ArrayList<StockProfit>();
+			List<StockSnap> insertlist1=new ArrayList<StockSnap>();
+
+			List<Cash> cashlist=debtService.getCashService().seleteAllCash();
+
+			Map map1=new HashMap();//收盘价格 用户持股
+			Map map2=new HashMap();
+			List<StockUser> list3=new ArrayList<StockUser>();//用户日盈亏
+			List<StockUser> list5=new ArrayList<StockUser>();//市场日盈亏
+			for(int i=0;i<list1.size();i++)
+			{
+				StockSnap temp=list1.get(i);
+				map1.put(temp.getStockid(), temp);
+			}
+
+			for(int i=0;i<list2.size();i++)
+			{
+				StockFlow temp=list2.get(i);
+				map1.put(temp.getStockid()+"_"+temp.getOperation(), temp);
+			}
+
+
+			for(int i=0;i<list4.size();i++)
+			{
+				Stock temp=list4.get(i);
+				StockSnap stocksnap=new StockSnap();
+				//stocksnap.setPosition(temp.getPosition());
+				if(map.get(temp.getStockid())!=null)
+				{
+					stocksnap.setPrice((Double)map.get(temp.getStockid()));
+					stocksnap.setStockid(temp.getStockid());
+					stocksnap.setTimestamp(date);
+					insertlist1.add(stocksnap);
+				}
+			}
+
+
+			for(int i=0;i<list.size();i++)
+			{
+				StockUser temp=list.get(i);
+
+				Double exchange=(Double)map.get("ex_"+temp.getMarket());//对人民币汇率
+				exchange=exchange==null?1:exchange;
+
+				StockSnap temp1=(StockSnap)map1.get(temp.getStockid());
+				StockFlow temp2=(StockFlow)map1.get(temp.getStockid()+"_"+temp.getUid()+"_1");//买入流水
+				StockFlow temp3=(StockFlow)map1.get(temp.getStockid()+"_"+temp.getUid()+"_2");//卖出流水
+				temp1=temp1==null?new StockSnap():temp1;
+				temp2=temp2==null?new StockFlow():temp2;
+				temp3=temp3==null?new StockFlow():temp3;
+				int zrccs=temp.getPosition()-temp2.getPosition()+temp3.getPosition();
+				double qqjg=(Double)map.get(temp.getStockid());
+				//日盈亏=（昨日持股数−今卖出数）∗（当前股价−昨收盘价）+今买入数∗（当前股价−今买入价）+今卖出数∗（卖出价−昨收盘价）
+				double profit=(zrccs-temp3.getPosition())*(qqjg-temp1.getPrice())+
+						temp2.getPosition()*qqjg-temp3.getPosition()*temp1.getPrice()-temp2.getPrice()+temp3.getPrice();
+				//double percentage=profit/(zrccs*temp1.getPrice()+temp2.getPrice());
+
+				//累计盈亏=当前股价∗持股数−∑买入金额+∑卖出金额
+				double profit1=qqjg*temp.getPosition()-temp.getBuycash()+temp.getSellcash();
+				//double percentage1=profit1/temp.getBuycash();
+
+				if(!map2.containsKey(temp.getUid()+"profit"))
+				{
+					map2.put(temp.getUid()+"profit", profit1*exchange);
+					map2.put(temp.getUid()+"buycash", temp.getBuycash()*exchange);
+					map2.put(temp.getUid()+"day", profit*exchange);
+					map2.put(temp.getUid()+"dayc", (zrccs*temp1.getPrice()+temp2.getPrice())*exchange);
+
+					map2.put(temp.getUid()+"total",temp.getPosition()*qqjg*exchange);
+					list3.add(temp);
+				}
+				else
+				{
+					double profittemp=(Double)map2.get(temp.getUid()+"profit")+profit1*exchange;
+					double buycashtemp=(Double)map2.get(temp.getUid()+"buycash")+temp.getBuycash()*exchange;
+					double totaltemp=(Double)map2.get(temp.getUid()+"total")+temp.getPosition()*qqjg*exchange;
+
+					map2.remove(temp.getUid()+"profit");
+					map2.remove(temp.getUid()+"buycash");
+					map2.remove(temp.getUid()+"total");
+
+					map2.put(temp.getUid()+"profit", profittemp);
+					map2.put(temp.getUid()+"buycash", buycashtemp);
+					map2.put(temp.getUid()+"total",totaltemp);
+
+					double datep=(Double)map2.get(temp.getUid()+"day")+profit*exchange;
+					double datec=(Double)map2.get(temp.getUid()+"dayc")+(zrccs*temp1.getPrice()+temp2.getPrice())*exchange;
+					map2.remove(temp.getUid()+"day");
+					map2.remove(temp.getUid()+"dayc");
+					map2.put(temp.getUid()+"day", datep);
+					map2.put(temp.getUid()+"dayc", datec);
+				}
+
+
+				String market=temp.getUid()+"_"+temp.getMarket();
+				if(!map2.containsKey(market+"day"))
+				{
+					map2.put(market+"day", profit*exchange);
+					map2.put(market+"dayc",(zrccs*temp1.getPrice()+temp2.getPrice())*exchange);
+
+					map2.put(market+"tday", profit1*exchange);
+					map2.put(market+"tdayc", temp.getBuycash()*exchange);
+					list5.add(temp);
+				}
+				else
+				{
+					double tday=(Double)map2.get(market+"tday")+profit1*exchange;
+					double tdayc=(Double)map2.get(market+"tdayc")+temp.getBuycash()*exchange;
+					map2.remove(market+"tday");
+					map2.remove(market+"tdayc");
+					map2.put(market+"tday", tday);
+					map2.put(market+"tdayc", tdayc);
+
+					double day=(Double)map2.get(market+"day")+profit*exchange;
+					double dayc=(Double)map2.get(market+"dayc")+(zrccs*temp1.getPrice()+temp2.getPrice())*exchange;
+					map2.remove(market+"day");
+					map2.remove(market+"dayc");
+					map2.put(market+"day", day);
+					map2.put(market+"dayc", dayc);
+				}
+
+				StockProfit stockprofit=new StockProfit();
+				stockprofit.setCtype(2);
+				stockprofit.setStatus(1);
+				stockprofit.setPercentage((zrccs*temp1.getPrice()+temp2.getPrice()));
+				stockprofit.setProfit(profit);
+				stockprofit.setStockid(temp.getStockid());
+				stockprofit.setTimestamp(date);
+				stockprofit.setYtdposition(zrccs);
+				stockprofit.setUid(temp.getUid());
+				stockprofit.setCurrency(temp.getMarket());
+
+				insertlist.add(stockprofit);//每日盈亏
+				StockProfit stockprofit1=new StockProfit();
+				stockprofit1.setStatus(1);
+				stockprofit1.setStockid(temp.getStockid());
+				stockprofit1.setTimestamp(date);
+				stockprofit1.setUid(temp.getUid());
+				stockprofit1.setCtype(3);
+				stockprofit1.setPercentage(temp.getBuycash());
+				stockprofit1.setProfit(profit1);
+				stockprofit1.setCurrency(temp.getMarket());
+				insertlist.add(stockprofit1);//累计盈亏
+
+			}
+
+			//计算用户累计盈亏 日盈亏 
+			for(int i=0;i<list3.size();i++)
+			{
+				StockUser temp=list3.get(i);
+				double profittemp=(Double)map2.get(temp.getUid()+"profit");
+				double buycashtemp=(Double)map2.get(temp.getUid()+"buycash");
+
+				double datep=(Double)map2.get(temp.getUid()+"day");
+				double datec=(Double)map2.get(temp.getUid()+"dayc");
+
+				Double totle=(Double)map2.get(temp.getUid()+"total");
+
+				StockProfit stockprofit=new StockProfit();
+				stockprofit.setStatus(1);
+				stockprofit.setCtype(5);
+				stockprofit.setTimestamp(date);
+				stockprofit.setUid(temp.getUid());
+				stockprofit.setStockid(temp.getStockid());
+				stockprofit.setPercentage(buycashtemp);
+				stockprofit.setProfit(profittemp);
+				stockprofit.setCurrency(1);
+				insertlist.add(stockprofit);//累计盈亏
+
+				stockprofit=new StockProfit();
+				stockprofit.setStatus(1);
+				stockprofit.setCtype(4);
+				stockprofit.setTimestamp(date);
+				stockprofit.setUid(temp.getUid());
+				stockprofit.setStockid(temp.getStockid());
+				stockprofit.setPercentage(datec);
+				stockprofit.setProfit(datep);
+				stockprofit.setCurrency(1);
+				insertlist.add(stockprofit);//日盈亏
+
+				double cash=getCashByUid(cashlist,temp.getUid(),map);
+
+				stockprofit=new StockProfit();
+				stockprofit.setStatus(1);
+				stockprofit.setCtype(8);
+				stockprofit.setTimestamp(date);
+				stockprofit.setUid(temp.getUid());
+				stockprofit.setPercentage(cash);
+				stockprofit.setProfit(totle);
+				stockprofit.setCurrency(1);
+
+				insertlist.add(stockprofit);//总资产快照
+
+			}
+
+			//计算市场累计盈亏 日盈亏
+			for(int i=0;i<list5.size();i++)
+			{
+				StockUser temp=list5.get(i);
+
+				String market=temp.getUid()+"_"+temp.getMarket();
+				double profittemp=(Double)map2.get(market+"tday");
+				double buycashtemp=(Double)map2.get(market+"tdayc");
+
+				double datep=(Double)map2.get(market+"day");
+				double datec=(Double)map2.get(market+"dayc");
+
+				StockProfit stockprofit=new StockProfit();
+				stockprofit.setStatus(1);
+				stockprofit.setCtype(7);
+				stockprofit.setTimestamp(date);
+				stockprofit.setUid(temp.getUid());
+				stockprofit.setMarket(temp.getMarket());
+				stockprofit.setPercentage(buycashtemp);
+				stockprofit.setProfit(profittemp);
+				stockprofit.setCurrency(temp.getMarket());
+				insertlist.add(stockprofit);//累计盈亏
+
+				stockprofit=new StockProfit();
+				stockprofit.setStatus(1);
+				stockprofit.setCtype(6);
+				stockprofit.setTimestamp(date);
+				stockprofit.setUid(temp.getUid());
+				stockprofit.setCurrency(temp.getMarket());
+				stockprofit.setMarket(temp.getMarket());
+				stockprofit.setPercentage(datec);
+				stockprofit.setProfit(datep);
+				insertlist.add(stockprofit);//日盈亏
+
+			}
+
+			key=stockDao.insertStockProfitByList(insertlist);
+			stockDao.insertStockSnapByList(insertlist1);
+
+			//插入日志
+
+		}catch(Exception e)
+		{
+			e.printStackTrace();
+			key=0;
+			throw e;
+		}
+		return key;
+	}
+
+	private Double getCashByUid(List<Cash> list,int uid,Map map)
+	{
+		Double result=0.0;
+		for(int i=0;i<list.size();i++)
+		{
+			Cash temp=list.get(i);
+			Double exchange=(Double)map.get("ex_"+temp.getCurrency());//对人民币汇率
+			exchange=exchange==null?1:exchange;
+
+			result=result+exchange*temp.getCash();
+		}
+
+		return result;
+	}
+
+	/**
+	 * 用户股票信息
+	 * @param map
+	 * @return
+	 * @throws Exception
+	 */
+	public Map selectProfit(Map map) throws Exception
+	{
+		Map result=new HashMap();
+		try{
+			Calendar cal=Calendar.getInstance();
+			cal.setTime(new Date());
+			cal.add(Calendar.DATE, -1);
+
+			List<StockUser> list=stockDao.selectStockUserByUid((Integer)map.get("uid"));
+			List<StockProfit> list1=stockDao.selectStockProfitByTime(map);
+			List<StockSnap> list5=stockDao.selectStockSnapByDate(sdf.format(cal.getTime()));
+			List<StockFlow> list4=stockDao.selectStockFlowByDate(sdf.format(new Date()));
+
+			List<Map> list3=new ArrayList<Map>();
+			Map map1=new HashMap();
+
+
+			for(int i=0;i<list1.size();i++)//股票盈利
+			{
+				StockProfit temp=list1.get(i);
+				if(temp.getCtype()==2||temp.getCtype()==3)
+				{
+					map1.put(temp.getStockid()+"_"+sdf.format(temp.getTimestamp())+"_"+temp.getCtype(), temp);
+				}
+				else if(temp.getCtype()==4||temp.getCtype()==5||temp.getCtype()==8)
+				{
+					map1.put(sdf.format(temp.getTimestamp())+"_"+temp.getCtype(), temp);
+				}
+				else if(temp.getCtype()==6||temp.getCtype()==7)
+				{
+					map1.put(temp.getMarket()+"_"+sdf.format(temp.getTimestamp())+"_"+temp.getCtype(), temp);
+				}
+
+			}
+
+			for(int i=0;i<list4.size();i++)//操作流水
+			{
+				StockFlow temp=list4.get(i);
+				map1.put(temp.getStockid()+"_"+temp.getOperation(), temp);
+			}
+
+			for(int i=0;i<list5.size();i++)//昨日收盘价
+			{
+				StockSnap temp=list5.get(i);
+				map1.put(temp.getStockid()+"ytd", temp);
+			}
+
+			List<Map> datelist=new ArrayList<Map>();
+			List<Map> stocklist=new ArrayList<Map>();
+
+			Integer date=(Integer)map.get("date");
+			date=date==null?0:date;
+			
+			
+			Double cash=0.0;
+			//组装date
+			for(int i=0;i<date;i++)
+			{
+				cal.setTime(new Date());
+				cal.add(Calendar.DATE, -i);
+				String d=sdf.format(cal.getTime());
+				Map temp=new HashMap();
+
+				StockProfit temp1=(StockProfit)map1.get(d+"_4");
+				StockProfit temp2=(StockProfit)map1.get(d+"_5");
+				StockProfit temp3=(StockProfit)map1.get(d+"_8");
+				temp1=temp1==null?new StockProfit():temp1;
+				temp2=temp2==null?new StockProfit():temp2;
+				temp3=temp3==null?new StockProfit():temp3;
+				cash=temp3.getPercentage();
+				temp.put("time",d);
+				temp.put("day",temp1.getProfit());
+				temp.put("dayPercent",temp1.getProfit()/(temp1.getPercentage()==0?1:temp1.getPercentage()));
+				temp.put("dayStatus", temp1.getProfit()>=0?"up":"down");
+				temp.put("totalstock",temp3.getProfit());
+				temp.put("totalcash",temp3.getPercentage());
+				temp.put("total",temp2.getProfit());
+				temp.put("totalPercent",temp2.getProfit()/(temp2.getPercentage()==0?1:temp2.getPercentage()));
+				temp.put("totalStatus", temp2.getProfit()>=0?"up":"down");
+
+				datelist.add(temp);
+			}
+
+			for(int i=0;i<list.size();i++)//股票
+			{
+				Map temp=new HashMap();
+				StockUser temp1=list.get(i);
+				temp.put("buycash", temp1.getBuycash());
+				temp.put("sellcash", temp1.getSellcash());
+
+				temp.put("market", temp1.getMarket());
+				temp.put("position", temp1.getPosition());
+				temp.put("costprice", temp1.getCostprice());
+				temp.put("dilutedprice", temp1.getDilutedprice());
+				temp.put("id", temp1.getStockid());
+				
+				StockSnap temp2=(StockSnap)map1.get(temp1.getStockid()+"ytd");
+				temp2=temp2==null?new StockSnap():temp2;
+				temp.put("ytdprice", temp2.getPrice());
+
+				StockFlow temp3=(StockFlow)map1.get(temp1.getStockid()+"_1");//买入流水
+				StockFlow temp4=(StockFlow)map1.get(temp1.getStockid()+"_2");//卖出流水
+
+				temp3=temp3==null?new StockFlow():temp3;
+				temp4=temp4==null?new StockFlow():temp4;
+				temp.put("jbuycash", temp3.getPrice());
+				temp.put("jbuynum", temp3.getPosition());
+				temp.put("jsellcash", temp4.getPrice());
+				temp.put("jsellnum", temp4.getPosition());
+				stocklist.add(temp);
+			}
+			
+			
+			result.put("date", datelist);
+			result.put("stock", stocklist);
+			result.put("day", date);
+			result.put("cash",cash);
+			//map1.keySet()
+		}
+		catch(Exception e)
+		{
+			e.printStackTrace();
+			result=null;
+			throw e;
+		}
+		return result;
+	}
+
+
+	
+	/**
+	 * Operation 1 买股票 2 卖出股票 3 删除买股票  4  删除卖出股票
+	 * @return 1 成功 0 失败
+	 **/
+	public int updateStockUser(StockFlow stockflow) throws Exception
+	{
+		int key=0;
+		Map map=new HashMap();
+		map.put("uid", stockflow.getUid());
+		map.put("stockid",stockflow.getStockid());
+		StockUser stockuser=new StockUser();
+		//查询股票持仓数
+		List<StockUser> list=stockDao.selectStockUser(map);
+		if(list.size()>0)
+		{
+			stockuser=list.get(0);
+		}
+
+		double costprice=0;
+		Double dilutedprice=0.0;
+		//计算持股成本及摊薄成本
+		if(stockflow.getOperation()==1)
+		{
+
+			costprice=(stockuser.getBuycash()+stockflow.getPosition()*stockflow.getPrice())
+					/(stockuser.getBuynum()+stockflow.getPosition());
+
+			dilutedprice=(stockflow.getPosition()*stockflow.getPrice()+stockuser.getBuycash()-stockuser.getSellcash())/(stockuser.getPosition()+stockflow.getPosition());
+
+			stockuser.setCostprice(costprice);
+			stockuser.setBuycash(stockuser.getBuycash()+stockflow.getPosition()*stockflow.getPrice());
+			stockuser.setBuynum(stockuser.getBuynum()+stockflow.getPosition());
+			stockuser.setSellcash(stockuser.getSellcash());
+			stockuser.setSellnum(stockuser.getSellnum());
+			stockuser.setDilutedprice(dilutedprice);
+			stockuser.setPosition(stockuser.getPosition()+stockflow.getPosition());
+			stockuser.setUid(stockflow.getUid());
+			stockuser.setStockid(stockflow.getStockid());
+		}else if(stockflow.getOperation()==2)
+		{
+			costprice=(stockuser.getBuycash())
+					/(stockuser.getBuynum());
+
+			if(stockuser.getPosition()-stockflow.getPosition()==0)
+			{
+				dilutedprice=null;
+			}
+			else
+			{
+				dilutedprice=(stockuser.getBuycash()-stockuser.getSellcash()-stockflow.getPosition()*stockflow.getPrice())
+						/(stockuser.getPosition()-stockflow.getPosition());
+			}
+
+			stockuser.setCostprice(costprice);
+			stockuser.setBuycash(stockuser.getBuycash());
+			stockuser.setBuynum(stockuser.getBuynum());
+			stockuser.setSellcash(stockuser.getSellcash()+stockflow.getPosition()*stockflow.getPrice());
+			stockuser.setSellnum(stockuser.getSellnum()+stockflow.getPosition());
+			stockuser.setDilutedprice(dilutedprice);
+			stockuser.setPosition(stockuser.getPosition()-stockflow.getPosition());
+			stockuser.setUid(stockflow.getUid());
+			stockuser.setStockid(stockflow.getStockid());
+		}else if(stockflow.getOperation()==3)
+		{
+			costprice=(stockuser.getBuycash()-stockflow.getPosition()*stockflow.getPrice())
+					/(stockuser.getBuynum()-stockflow.getPosition());
+
+			dilutedprice=(stockuser.getBuycash()-stockuser.getSellcash()-stockflow.getPosition()*stockflow.getPrice())
+					/(stockuser.getPosition()-stockflow.getPosition());
+
+			stockuser.setCostprice(costprice);
+			stockuser.setBuycash(stockuser.getBuycash()-stockflow.getPosition()*stockflow.getPrice());
+			stockuser.setBuynum(stockuser.getBuynum()-stockflow.getPosition());
+			stockuser.setSellcash(stockuser.getSellcash());
+			stockuser.setSellnum(stockuser.getSellnum());
+			stockuser.setDilutedprice(dilutedprice);
+			stockuser.setPosition(stockuser.getPosition()-stockflow.getPosition());
+			stockuser.setUid(stockflow.getUid());
+			stockuser.setStockid(stockflow.getStockid());
+		}else if(stockflow.getOperation()==4)
+		{
+			costprice=(stockuser.getBuycash())
+					/(stockuser.getBuynum());
+
+			dilutedprice=(stockuser.getBuycash()-stockuser.getSellcash()+stockflow.getPosition()*stockflow.getPrice())
+					/(stockuser.getPosition()+stockflow.getPosition());
+
+			stockuser.setCostprice(costprice);
+			stockuser.setBuycash(stockuser.getBuycash());
+			stockuser.setBuynum(stockuser.getBuynum());
+			stockuser.setSellcash(stockuser.getSellcash()-stockflow.getPosition()*stockflow.getPrice());
+			stockuser.setSellnum(stockuser.getSellnum()-stockflow.getPosition());
+			stockuser.setDilutedprice(dilutedprice);
+			stockuser.setPosition(stockuser.getPosition()+stockflow.getPosition());
+			stockuser.setUid(stockflow.getUid());
+			stockuser.setStockid(stockflow.getStockid());
+		}
+		else
+		{
+			return 0;
+		}
+
+		//卖出股票 及删除卖出股票流水  更新平仓盈亏
+		if(stockflow.getOperation()==2)
+		{
+			double profit=(stockflow.getPrice()-stockuser.getCostprice())*stockflow.getPosition();
+			//double percentage=profit/(stockflow.getPrice()*stockflow.getPosition());
+
+			StockProfit stockprofit=new StockProfit();
+			stockprofit.setFlowid(stockflow.getId());
+			stockprofit.setCurrency(stockflow.getCurrency());
+			stockprofit.setMarket(stockflow.getCurrency());
+			stockprofit.setProfit(profit);
+			stockprofit.setStockid(stockflow.getStockid());
+			stockprofit.setStatus(stockflow.getStatus());
+			stockprofit.setTimestamp(stockflow.getTimestamp());
+			stockprofit.setUid(stockflow.getUid());
+			stockprofit.setCtype(1);
+			stockprofit.setPercentage((stockflow.getPrice()*stockflow.getPosition()));
+			stockDao.insertStockProfit(stockprofit);
+		}
+
+		if(stockflow.getOperation()==4)
+		{
+			stockDao.delStockProfit(stockflow.getId());
+		}
+
+		//更新用户持股
+		if(list.size()>0)
+		{
+			key=stockDao.updateStockUser(stockuser);
+		}else
+		{
+			key=stockDao.insertStockUser(stockuser);
+		}
+		return key;
+	}
+
+
+}

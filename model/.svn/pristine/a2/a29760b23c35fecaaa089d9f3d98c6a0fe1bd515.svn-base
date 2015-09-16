@@ -1,0 +1,110 @@
+package ddq.model;
+
+public class JsonData {
+
+	/*"currency": "RMB",
+    "unit": "59.9",
+    "unitPercent": "17.5%",
+    "unitStatus": "up",
+    "totalMarket": "234.69万",
+    "day": "234.00",
+    "dayPercent": "6.08%",
+    "dayStatus": "up",
+    "totalPercent": "",
+    "totalStatus": "down",
+    "total": "447.68"*/
+	String currency;
+	String unit;
+	String unitPercent;
+	String unitStatus;
+	String totalMarket;
+	String day;
+	String dayPercent;
+	String totalPercent;
+	String totalStatus;
+	String total;
+	String time;
+	String dayStatus;
+	String totalall;
+
+	
+	public String getCurrency() {
+		return currency;
+	}
+	public void setCurrency(String currency) {
+		this.currency = currency;
+	}
+	public String getUnit() {
+		return unit;
+	}
+	public void setUnit(String unit) {
+		this.unit = unit;
+	}
+	public String getUnitPercent() {
+		return unitPercent;
+	}
+	public void setUnitPercent(String unitPercent) {
+		this.unitPercent = unitPercent;
+	}
+	public String getUnitStatus() {
+		return unitStatus;
+	}
+	public void setUnitStatus(String unitStatus) {
+		this.unitStatus = unitStatus;
+	}
+	public String getTotalMarket() {
+		return totalMarket;
+	}
+	public void setTotalMarket(String totalMarket) {
+		this.totalMarket = totalMarket;
+	}
+	public String getDay() {
+		return day;
+	}
+	public void setDay(String day) {
+		this.day = day;
+	}
+	public String getDayPercent() {
+		return dayPercent;
+	}
+	public void setDayPercent(String dayPercent) {
+		this.dayPercent = dayPercent;
+	}
+	public String getTotalPercent() {
+		return totalPercent;
+	}
+	public void setTotalPercent(String totalPercent) {
+		this.totalPercent = totalPercent;
+	}
+	public String getTotalStatus() {
+		return totalStatus;
+	}
+	public void setTotalStatus(String totalStatus) {
+		this.totalStatus = totalStatus;
+	}
+	public String getTotal() {
+		return total;
+	}
+	public void setTotal(String total) {
+		this.total = total;
+	}
+	public String getTime() {
+		return time;
+	}
+	public void setTime(String time) {
+		this.time = time;
+	}
+	public String getDayStatus() {
+		return dayStatus;
+	}
+	public void setDayStatus(String dayStatus) {
+		this.dayStatus = dayStatus;
+	}
+	public String getTotalall() {
+		return totalall;
+	}
+	public void setTotalall(String totalall) {
+		this.totalall = totalall;
+	}
+	
+}

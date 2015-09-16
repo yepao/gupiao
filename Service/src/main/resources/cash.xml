@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap        
+    PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN"        
+    "http://ibatis.apache.org/dtd/sql-map-2.dtd">  
+  
+<sqlMap>  
+    <typeAlias alias="cash" type="ddq.model.Cash"/>  
+    <typeAlias alias="cashflow" type="ddq.model.CashFlow"/> 
+    <typeAlias alias="cashlog" type="ddq.model.CashLog"/> 
+    <typeAlias alias="cashsyslog" type="ddq.model.CashSysLog"/>  
+      
+   
+    <!-- cash -->
+    <select id="selectAllCash" resultClass="cash" >  
+        select uid,cash,remark,createdate,currency,updatedate,id from tb_cash;  
+    </select>  
+    
+    <select id="selectCashByUid" resultClass="cash" parameterClass="cash">  
+        select uid,cash,remark,createdate,currency,updatedate,id from tb_cash where uid=#uid#;  
+    </select>
+    
+    <insert id="insertCash" parameterClass="cash">  
+        <![CDATA[  
+            insert into tb_cash    
+              (uid,cash,remark,createdate,currency)  
+              values (#uid#,#cash#,#remark#,#createdate#,#currency#);  
+        ]]>  
+        <selectKey resultClass="int" keyProperty="id">   
+           SELECT last_insert_id() as id ; 
+        </selectKey>  
+    </insert>
+    
+    <delete id="deleteCashById" parameterClass="cash">
+          delete from tb_cash where id=#id#
+    </delete>
+    
+    <update id="updateCashByUid" parameterClass="cash">
+       update tb_cash set cash=#cash#,updatedate=#updatedate# where uid=#uid# and currency=#currency#
+    </update> 
+    
+    
+    <!-- cashflow -->
+    <select id="selectAllCashFlow" resultClass="cashflow" >  
+        select id,status,cash,operation,currency,timestamp from tb_cash_flow;  
+    </select>  
+    
+    <select id="selectCashFlowByUid" resultClass="cashflow" >  
+        select id,status,cash,operation,currency,timestamp from tb_cash_flow where uid=#uid# and status=1;  
+    </select>  
+    
+    <select id="selectCashFlowByTime" resultClass="cashflow" parameterClass="java.util.Map">
+        select uid,status,cash,remark,createdate,currency,updatedate,id from tb_cash_flow;
+         <dynamic prepend="where">  
+            <isNotEmpty prepend="and" property="status">    
+                status=1
+            </isNotEmpty> 
+            <isNotEmpty prepend="and" property="uid">    
+                uid=$uid$
+            </isNotEmpty>     
+            <isNotEmpty prepend="and" property="starttime">    
+                timestamp >=$starttime$
+            </isNotEmpty>    
+            <isNotEmpty prepend="and" property="endtime">    
+               <![CDATA[ timestamp <=$endtime$ ]]> 
+            </isNotEmpty>    
+        </dynamic>   
+    </select>
+    
+    <insert id="insertCashFlow" parameterClass="cashflow">
+        <![CDATA[  
+            insert into tb_cash_flow    
+              (uid,cash,currency,operation,timestamp,status)  
+              values (#uid#,#cash#,#currency#,#operation#,#timestamp#,#status#);  
+        ]]>  
+        <selectKey resultClass="int" keyProperty="id">   
+           SELECT last_insert_id() as id ; 
+        </selectKey> 
+    </insert>
+    
+    <delete id="deleteCashFlowById" parameterClass="int">
+          delete from tb_cash_flow where id=#id#
+    </delete>
+    
+    <update id="delCashFlowById" parameterClass="int">
+          update tb_cash_flow set status=0 where id=#id#
+    </update>
+    
+     <update id="updateCashFlowById" parameterClass="int">
+       update tb_cash_flow set cash=#cash# where id=#id#
+     </update> 
+     
+     
+     <!-- cashlog -->
+     <select id="selectAllCashSysLog" resultClass="cashlog" >  
+        select id,uid,cash,currency,operation,timestamp from tb_cash_log;  
+     </select>
+     
+      <select id="selectCashSysLogByUid" resultClass="cashlog" >  
+        select id,uid,cash,operation,currency,timestamp from tb_cash_log where uid=#uid#;  
+      </select>  
+    
+      <select id="selectCashSysLogByTime" resultClass="cashlog" parameterClass="java.util.Map">
+        select uid,cash,remark,createdate,currency,updatedate,id from tb_cash_flow;
+         <dynamic prepend="where">    
+           <isNotEmpty prepend="and" property="uid">    
+                uid=$uid$
+            </isNotEmpty>     
+            <isNotEmpty prepend="and" property="starttime">    
+                timestamp >=$starttime$
+            </isNotEmpty>    
+            <isNotEmpty prepend="and" property="endtime">    
+               <![CDATA[ timestamp <=$endtime$ ]]> 
+            </isNotEmpty>    
+        </dynamic>   
+      </select>
+     
+       <insert id="insertCashSysLog" parameterClass="cashlog">
+        <![CDATA[  
+            insert into tb_cash_flow    
+              (uid,cash,currency,operation,timestamp)  
+              values (#uid#,#cash#,#currency#,#operation#,#timestamp#);  
+        ]]>  
+        <selectKey resultClass="int" keyProperty="id">   
+           SELECT last_insert_id() as id ; 
+        </selectKey> 
+      </insert>
+    
+      <delete id="deleteCashSysLogById" parameterClass="int">
+          delete from tb_cash_log where id=#id#
+      </delete>
+    
+
+     <!-- cashsyslog -->
+     <select id="selectAllCashLog" resultClass="cashlog" >  
+        select id,uid,cash,currency,operation,timestamp from tb_cash_log;  
+     </select>
+     
+      <select id="selectCashLogByUid" resultClass="cashlog" >  
+        select id,cash,operation,currency,timestamp from tb_cash_log where uid=#uid# ;  
+      </select>  
+    
+      <select id="selectCashLogByTime" resultClass="cashlog" parameterClass="java.util.Map">
+        select uid,cash,remark,createdate,currency,updatedate,id from tb_cash_flow;
+         <dynamic prepend="where">    
+           <isNotEmpty prepend="and" property="uid">    
+                uid=$uid$
+            </isNotEmpty>     
+            <isNotEmpty prepend="and" property="starttime">    
+                timestamp >=$starttime$
+            </isNotEmpty>    
+            <isNotEmpty prepend="and" property="endtime">    
+               <![CDATA[ timestamp <=$endtime$ ]]> 
+            </isNotEmpty>    
+        </dynamic>   
+      </select>
+     
+       <insert id="insertCashLog" parameterClass="cashlog">
+        <![CDATA[  
+            insert into tb_cash_log    
+              (uid,cash,currency,operation,timestamp)  
+              values (#uid#,#cash#,#currency#,#operation#,#timestamp#);  
+        ]]>  
+        <selectKey resultClass="int" keyProperty="id">   
+           SELECT last_insert_id() as id ; 
+        </selectKey> 
+      </insert>
+    
+      <delete id="deleteCashLogById" parameterClass="int">
+          delete from tb_cash_log where id=#id#
+      </delete>
+    
+</sqlMap>  

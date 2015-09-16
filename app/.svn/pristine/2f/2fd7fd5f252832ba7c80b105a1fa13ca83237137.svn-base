@@ -1,0 +1,361 @@
+package app;
+
+import java.text.*;
+import java.util.*;
+
+import javax.servlet.http.HttpServletRequest;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;  
+import org.springframework.ui.ModelMap;  
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;  
+import org.springframework.web.bind.annotation.RequestMethod;  
+import org.springframework.web.bind.annotation.ResponseBody;
+
+import com.google.gson.Gson;
+
+import ddq.Service.*;
+import ddq.model.*;
+import ddq.model.JsonClass.Person;
+
+@Controller  
+@RequestMapping("/json")
+public class JsonController {
+
+	@Autowired
+	private HttpServletRequest req;
+
+	@Autowired
+	private StockService stockService;
+
+	@Autowired
+	private AppCache appCache;
+	
+
+	SimpleDateFormat sdf=new SimpleDateFormat("yyyy-MM-dd");
+	Random ran=new Random();
+	
+	Gson gg=new Gson();
+	Map mapr=new HashMap();
+
+	public JsonController()
+	{
+		mapr.clear();
+		mapr.put("sh600798", 16.69*Math.random()*2);
+		mapr.put("sh601866", 11.35*Math.random()*2);
+		mapr.put("sh600379", 18.45*Math.random()*2);
+		mapr.put("sh601216", 28.33*Math.random()*2);
+		mapr.put("sh600448", 6.38*Math.random()*2);
+		mapr.put("sh600399", 19.92*Math.random()*2);
+		mapr.put("sh600844", 4.72*Math.random()*2);
+		mapr.put("sh603085", 49.58*Math.random()*2);
+		mapr.put("sh600252", 24.77*Math.random()*2);
+		mapr.put("sh603018", 77.39*Math.random()*2);
+		mapr.put("00005", 72.45*Math.random()*2);
+		mapr.put("00011", 163.4*Math.random()*2);
+		mapr.put("00222", 18.67*Math.random()*2);
+		mapr.put("00302", 108.8*Math.random()*2);
+		mapr.put("GLBL", 21.79*Math.random()*2);
+		mapr.put("NK", 32.64*Math.random()*2);
+		mapr.put("CYRXW", 2.05*Math.random()*2);
+		mapr.put("WYIGU", 13.1*Math.random()*2);
+	}
+
+	@RequestMapping(value="/getTotalAssetsInfo.json",method = RequestMethod.GET)  
+	public @ResponseBody String getTotalAssetsInfo() throws Exception { 
+
+		String day=req.getParameter("day");
+		day=day==null||day==""?"7":day;
+
+		Map map=appCache.getStockInfo(9802,Integer.parseInt(day));
+		Map map1=appCache.getCurrency();
+
+		if((Integer)map.get("day")!=Integer.parseInt(day))
+		{
+			map=appCache.updateStockInfo(9802,Integer.parseInt(day));
+		}
+
+		JsonClass temp1=new JsonClass();
+		List<Map> datelist=(List<Map>)map.get("date");
+		List<Map> stocklist=(List<Map>)map.get("stock");
+
+		Double dayprofit=0.0;
+		Double daycash=0.0;
+		Double totalprofit=0.0;		
+		Double totalcash=0.0;
+		Double sumcash=0.0;
+
+		//计算总金额 今日盈亏及总盈亏
+		for(int i=0;i<stocklist.size();i++)
+		{
+
+			Map stockMap=stocklist.get(i);
+			Integer position=(Integer)stockMap.get("position");
+			Integer jbuynum=(Integer)stockMap.get("jbuynum");
+			Integer jsellnum=(Integer)stockMap.get("jsellnum");
+			Double ytdprice=(Double)stockMap.get("ytdprice");
+			Double jbuycash=(Double)stockMap.get("jbuycash");
+			Double jsellcash=(Double)stockMap.get("jsellcash");
+			Double buycash=(Double)stockMap.get("buycash");
+			Double sellcash=(Double)stockMap.get("sellcash");
+			Double qqjg=(Double)mapr.get(stockMap.get("id"));
+			Integer zrccs=position-jbuynum+jsellnum;
+
+			Double exchange=(Double)map1.get(stockMap.get("market"));
+			exchange=exchange==null?1:exchange;
+
+			dayprofit=dayprofit+((zrccs-jsellnum)*(qqjg-ytdprice)+
+					jbuynum*qqjg-jsellnum*ytdprice-jbuycash+jsellcash)*exchange;
+			daycash=daycash+(jbuycash+ytdprice*position)*exchange;
+			totalprofit=totalprofit+(position*qqjg-buycash+sellcash)*exchange;
+			totalcash=totalcash+(buycash)*exchange;
+			sumcash=sumcash+(position*qqjg)*exchange;
+		}
+		JsonData date=new JsonData();
+		date.setTime(sdf.format(new Date()));
+		date.setDay(ArithmeticUtil.round(dayprofit,3)+"");
+		date.setDayPercent(ArithmeticUtil.round(dayprofit/daycash*100,3)+"");
+		date.setDayStatus(dayprofit<0?"down":"up");
+		date.setTotal(ArithmeticUtil.round(totalprofit,3)+"");
+		date.setTotalStatus(totalprofit<0?"down":"up");
+		date.setTotalPercent(ArithmeticUtil.round(totalprofit/totalcash*100,3)+"");
+		date.setTotalall(ArithmeticUtil.round((sumcash+(Double)map.get("cash")),3)+"");
+		temp1.getTotalAssets().getModel().getData().add(0, date);;
+		
+		for(int i=0;i<datelist.size();i++)
+		{
+			Map datemap=datelist.get(i);
+			if(!datemap.get("time").toString().equals(sdf.format(new Date())))
+			{
+				date=new JsonData();
+                
+				date.setTime(datemap.get("time").toString());
+				date.setDay(datemap.get("day")+"");
+				date.setDayPercent(ArithmeticUtil.round((Double)datemap.get("dayPercent")*100,3)+"");
+				date.setDayStatus((Double)datemap.get("day")<0?"down":"up");
+				date.setTotal(ArithmeticUtil.round((Double)datemap.get("total"),3)+"");
+				date.setTotalStatus((Double)datemap.get("totalPercent")<0?"down":"up");
+				date.setTotalPercent(ArithmeticUtil.round((Double)datemap.get("totalPercent")*100,3)+"");
+				date.setTotalall(ArithmeticUtil.round((Double)datemap.get("totalstock")+(Double)datemap.get("totalcash"),3)+"");
+				temp1.getTotalAssets().getModel().getData().add(0,date);
+			}
+		}
+		
+		
+		temp1.getTotalAssets().getModel().setTotal(ArithmeticUtil.round((sumcash+(Double)map.get("cash")),3)+"");
+
+
+		String callback=req.getParameter("callback");
+		String result="";
+		if(callback==null||callback=="")
+		{
+			result= gg.toJson(temp1.getTotalAssets());
+		}
+		else
+		{
+			result=callback+"("+gg.toJson(temp1.getTotalAssets())+")";
+		}
+
+		return result;  
+	}
+
+	@RequestMapping(value="/getMarketInfo.json",method = RequestMethod.GET)  
+	public @ResponseBody String getMarketInfo() throws Exception { 
+
+		Map map=appCache.getStockInfo(9802,0);
+		JsonClass temp=new JsonClass();
+
+		JsonClass.Market  temp1=temp.new Market();
+		temp1.setName("A股");
+		GetMarkData((List<Map>)map.get("stock"),1,mapr,temp1);
+		temp.getMarkets().getModel().add(temp1);
+
+		temp1=temp.new Market();
+		temp1.setName("港股");
+		GetMarkData((List<Map>)map.get("stock"),2,mapr,temp1);
+		temp.getMarkets().getModel().add(temp1);
+
+		temp1=temp.new Market();
+		temp1.setName("美股");
+		GetMarkData((List<Map>)map.get("stock"),3,mapr,temp1);
+		temp.getMarkets().getModel().add(temp1);
+
+		String callback=req.getParameter("callback");
+
+		String result="";
+		if(callback==null||callback=="")
+		{
+			result= gg.toJson(temp.getMarkets());
+		}
+		else
+		{
+			result=callback+"("+gg.toJson(temp.getMarkets())+")";
+		}
+		return result;  
+	}
+
+	private void GetMarkData(List<Map> list,Integer markid,Map mapr,JsonClass.Market temp1) throws Exception 
+	{
+
+		Double dayprofit=0.0;
+		Double daycash=0.0;
+		Double totalprofit=0.0;		
+		Double totalcash=0.0; 
+		Double all=0.0;
+
+		Map map1=appCache.getCurrency();
+		Double exchange=(Double)map1.get(markid);
+		//System.out.println(exchange+"_"+markid);
+		exchange=exchange==null?1:exchange;
+
+		//计算总金额 今日盈亏及总盈亏
+		for(int i=0;i<list.size();i++)
+		{
+			Map stockMap=list.get(i);
+
+			Integer position=(Integer)stockMap.get("position");
+			Integer jbuynum=(Integer)stockMap.get("jbuynum");
+			Integer jsellnum=(Integer)stockMap.get("jsellnum");
+			Double ytdprice=(Double)stockMap.get("ytdprice");
+			Double jbuycash=(Double)stockMap.get("jbuycash");
+			Double jsellcash=(Double)stockMap.get("jsellcash");
+			Double buycash=(Double)stockMap.get("buycash");
+			Double sellcash=(Double)stockMap.get("sellcash");
+			Double qqjg=(Double)mapr.get(stockMap.get("id"));
+			Integer zrccs=position-jbuynum+jsellnum;
+
+			if((Integer)stockMap.get("market")==markid)
+			{
+				dayprofit=dayprofit+(zrccs-jsellnum)*(qqjg-ytdprice)+
+						jbuynum*qqjg-jsellnum*ytdprice-jbuycash+jsellcash;
+				daycash=daycash+jbuycash+ytdprice*position;
+				totalprofit=totalprofit+position*qqjg-buycash+sellcash;
+				totalcash=totalcash+buycash;
+				all=all+position*qqjg;
+
+			}
+
+		}
+		JsonData date=new JsonData();
+		date.setCurrency("RMB");
+		date.setTotalMarket(ArithmeticUtil.round(all*exchange,3)+"");
+		date.setDay(ArithmeticUtil.round(dayprofit*exchange,3)+"");
+		date.setDayPercent(daycash==0?"0":ArithmeticUtil.round(dayprofit/daycash*100,3)+"");
+		date.setDayStatus(dayprofit<0?"down":"up");
+		date.setTotal(ArithmeticUtil.round(totalprofit*exchange,3)+"");
+		date.setTotalStatus(totalprofit<0?"down":"up");
+		date.setTotalPercent(totalcash==0?"0":ArithmeticUtil.round(totalprofit/totalcash*100,3)+"");
+		temp1.getData().setRmb(date);
+
+		date=new JsonData();
+		date.setCurrency("original");
+		date.setTotalMarket(ArithmeticUtil.round(all,3)+"");
+		date.setDay(ArithmeticUtil.round(dayprofit,3)+"");
+		date.setDayPercent(daycash==0?"0":ArithmeticUtil.round(dayprofit/daycash*100,3)+"");
+		date.setDayStatus(dayprofit<0?"down":"up");
+		date.setTotal(ArithmeticUtil.round(totalprofit,3)+"");
+		date.setTotalStatus(totalprofit<0?"down":"up");
+		date.setTotalPercent(totalcash==0?"0":ArithmeticUtil.round(totalprofit/totalcash*100,3)+"");
+		temp1.getData().setOriginal(date);
+	}
+
+	@RequestMapping(value="/getPersonInfo.json",method = RequestMethod.GET)  
+	public @ResponseBody String getPersonInfo() throws Exception { 
+
+		Map map=appCache.getStockInfo(9802,0);
+		Map ttmap=appCache.getStock();
+		Map map1=appCache.getCurrency();
+
+		JsonClass temp=new JsonClass();
+		//List<Stock> list=new ArrayList<Stock>();
+		List<Map> list=(List<Map>)map.get("stock");
+		for(int i=0;i<list.size();i++)
+		{
+			JsonClass.Person  temp1=temp.new Person();
+			Map stockMap=list.get(i);
+
+			Integer position=(Integer)stockMap.get("position");
+			Integer jbuynum=(Integer)stockMap.get("jbuynum");
+			Integer jsellnum=(Integer)stockMap.get("jsellnum");
+			Double ytdprice=(Double)stockMap.get("ytdprice");
+			Double jbuycash=(Double)stockMap.get("jbuycash");
+			Double jsellcash=(Double)stockMap.get("jsellcash");
+			Double buycash=(Double)stockMap.get("buycash");
+			Double sellcash=(Double)stockMap.get("sellcash");
+			Double qqjg=(Double)mapr.get(stockMap.get("id"));
+			Integer zrccs=position-jbuynum+jsellnum;
+
+
+			Stock stock=(Stock)ttmap.get(stockMap.get("id"));
+			stock=stock==null?new Stock():stock;
+
+			Double exchange=(Double)map1.get(stockMap.get("market"));
+			exchange=exchange==null?1:exchange;
+
+			Double dayprofit=((zrccs-jsellnum)*(qqjg-ytdprice)+
+					jbuynum*qqjg-jsellnum*ytdprice-jbuycash+jsellcash)*exchange;
+			Double daycash=(ytdprice*position+jbuycash)*exchange;
+			Double totalprofit=(position*qqjg-buycash+sellcash)*exchange;
+			Double totalcash=(buycash)*exchange;
+
+			temp1.setName(stock.getName());
+			temp1.setType(stock.getMarketname());
+			temp1.setCode(stock.getStockid());
+
+			JsonData date=new JsonData();
+			date.setCurrency("original");
+			date.setTotalMarket(ArithmeticUtil.round(position*qqjg,3)+"");
+			date.setDay(ArithmeticUtil.round(dayprofit,3)+"");
+			date.setDayPercent(ArithmeticUtil.round(dayprofit/daycash*100,3)+"");
+			date.setDayStatus(dayprofit<0?"down":"up");
+			date.setTotal(ArithmeticUtil.round(totalprofit,3)+"");
+			date.setUnit(ArithmeticUtil.round(qqjg,3)+"");
+			date.setUnitPercent(ArithmeticUtil.round(ran.nextDouble(),3)+"");
+			date.setUnitStatus(qqjg<0?"down":"up");
+			date.setTotalStatus(totalprofit<0?"down":"up");
+			date.setTotalPercent(ArithmeticUtil.round(totalprofit/totalcash*100,3)+"");
+			temp1.getData().setOriginal(date);
+
+			date=new JsonData();
+			date.setCurrency("rmb");
+			date.setTotalMarket(ArithmeticUtil.round(position*qqjg*exchange,3)+"");
+			date.setDay(ArithmeticUtil.round(dayprofit*exchange,3)+"");
+			date.setDayPercent(ArithmeticUtil.round(dayprofit/daycash*100,3)+"");
+			date.setDayStatus(dayprofit<0?"down":"up");
+			date.setTotal(ArithmeticUtil.round(totalprofit*exchange,3)+"");
+			date.setTotalStatus(totalprofit<0?"down":"up");
+			date.setTotalPercent(ArithmeticUtil.round(totalprofit/totalcash,3)+"");
+			date.setUnit(ArithmeticUtil.round(qqjg*exchange,3)+"");
+			date.setUnitPercent(ArithmeticUtil.round(ran.nextDouble(),3)+"");
+			date.setUnitStatus(qqjg<0?"down":"up");
+			temp1.getData().setRmb(date);
+
+			temp.getPersons().getModel().add(temp1);
+
+		}
+
+		String callback=req.getParameter("callback");
+
+		String result="";
+		if(callback==null||callback=="")
+		{
+			result= gg.toJson(temp.getPersons());
+		}
+		else
+		{
+			result=callback+"("+gg.toJson(temp.getPersons())+")";
+		}
+
+
+		return result;  
+	}
+
+	@RequestMapping(value="/clear",method = RequestMethod.GET)  
+	public @ResponseBody String clear() throws Exception { 
+		appCache.deleteAllCache();
+		return "ok";
+	}
+}

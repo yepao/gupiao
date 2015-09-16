@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE sqlMap        
+    PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN"        
+    "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+
+<sqlMap>
+	<typeAlias alias="user" type="ddq.model.User" />
+	<typeAlias alias="currency" type="ddq.model.Currency" />
+
+	<!-- user -->
+	<select id="selectAllUser" resultClass="user">
+		select id,uid,wid,name,faceurl,remark,phone,pwd from tb_user 
+	</select>
+
+	<insert id="insertUser" parameterClass="user">  
+        <![CDATA[  
+            insert into tb_user    
+            (uid,wid,name,faceurl,remark,phone,pwd)  
+            values (#uid#,#wid#,#name#,#faceurl#,#remark#,#phone#,#pwd#);  
+        ]]>
+		<selectKey resultClass="int" keyProperty="id">
+			SELECT last_insert_id() as id ;
+		</selectKey>
+	</insert>
+
+	<delete id="deleteUserById" parameterClass="int">
+		delete from tb_user where id=#id#
+	</delete>
+
+	<update id="updateUserById" parameterClass="user">
+		update tb_user set name=#name# where id=#id#
+	</update>
+    
+    <!-- currency -->
+    <select id="selectAllCurrency" resultClass="currency">
+		select id,name,exchange,symbol,isocode,market from tb_currency 
+	</select>
+
+	<insert id="insertCurrency" parameterClass="currency">  
+        <![CDATA[  
+            insert into tb_currency    
+            (name,exchange,symbol,isocode,market)  
+            values (#name#,#exchange#,#symbol#,#isocode#,#market#);  
+        ]]>
+		<selectKey resultClass="int" keyProperty="id">
+			SELECT last_insert_id() as id ;
+		</selectKey>
+	</insert>
+
+	<delete id="deleteCurrencyByCode" parameterClass="string">
+		delete from tb_currency where isocode=#isocode#
+	</delete>
+
+	<update id="updateCurrencyByCode" parameterClass="currency">
+		update tb_currency set name=#name#,exchange=#exchange#,symbol=#symbol# where isocode=#isocode#
+	</update>
+
+</sqlMap>
